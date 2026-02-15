@@ -4,18 +4,20 @@ import logging
 from typing import Dict, List
 from tqdm.auto import tqdm
 import numpy as np
-from pymilvus.model.hybrid import MGTEEmbeddingFunction
+# from pymilvus.model.hybrid import MGTEEmbeddingFunction
+from pymilvus.model.hybrid import BGEM3EmbeddingFunction
 
 logger = logging.getLogger(__name__)
 
 
 class EmbeddingService:
-    """Service for generating embeddings using MGTEEmbeddingFunction"""
+    """Service for generating embeddings using any embedding function (MGTE, BGEM3, etc.)"""
 
     def __init__(self, use_fp16: bool = False, device: str = "cpu"):
         """Initialize embedding function"""
-        self.ef = MGTEEmbeddingFunction(use_fp16=use_fp16, device=device)
+        self.ef = BGEM3EmbeddingFunction(use_fp16=use_fp16, device=device)
         self.dense_dim = self.ef.dim["dense"]
+        self.sparse_dim = self.ef.dim["sparse"]
 
     def embed_text(self, text: str) -> Dict[str, np.ndarray]:
         """Embed text query into dense and sparse vectors"""

@@ -1,14 +1,14 @@
 [project]
 name = "shopnexus-recommender"
 version = "0.1.0"
-description = "A recommendation service for ShopNexus"
+description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "flask>=3.1.2",
     "matplotlib>=3.10.8",
-    "numpy>=2.4.1",
-    "pymilvus>=2.6.6",
+    "numpy>=2.4.2",
+    "pymilvus>=2.6.9",
     "pymilvus-model>=0.3.2",
     "python-dateutil>=2.9.0.post0",
     "scikit-learn>=1.8.0",

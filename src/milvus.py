@@ -11,7 +11,6 @@ from pymilvus import (
     AnnSearchRequest,
     WeightedRanker,
 )
-from pymilvus.model.hybrid import MGTEEmbeddingFunction
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +21,7 @@ class MilvusClient:
     def __init__(
         self,
         cf_dim: int,
+        content_dim: int,
         fused_dim: int,
         milvus_host: str = "localhost",
         milvus_port: int = 19530,
@@ -30,11 +30,8 @@ class MilvusClient:
         self.milvus_host = milvus_host
         self.milvus_port = milvus_port
 
-        # Initialize embedding function
-        self.ef = MGTEEmbeddingFunction(use_fp16=False, device="cpu")
-        self.content_dim = self.ef.dim["dense"]
-        self.sparse_dim = self.ef.dim["sparse"]
         self.cf_dim = cf_dim
+        self.content_dim = content_dim
         self.fused_dim = fused_dim
 
         # Setup connection and collections

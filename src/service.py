@@ -19,14 +19,15 @@ class Service:
     def __init__(self, milvus_host: str = "localhost", milvus_port: int = 19530):
         """Initialize service with Milvus connection and embedding services"""
         self.embedding_service = EmbeddingService()  # Embedding dim
-        self.model = CFModel()  # CF dim
+        self.cf_model = CFModel()  # CF dim
         # self.model.load_model()
         self.fusion = EmbeddingFusion(
             content_dim=self.embedding_service.dense_dim,
-            cf_dim=self.model.embedding_dim,
+            cf_dim=self.cf_model.embedding_dim,
         )  # Fused dim
         self.client = MilvusClient(
             cf_dim=self.fusion.cf_dim,
+            content_dim=self.fusion.content_dim,
             fused_dim=self.fusion.fused_dim,
             milvus_host=milvus_host,
             milvus_port=milvus_port,
