@@ -8,7 +8,9 @@ Hệ thống hoạt động như một trợ lý ảo thông minh, liên tục q
 
 Điểm đặc biệt của hệ thống là khả năng **học tập thời gian thực** (Real-time Learning): ngay khi bạn vừa xem hoặc mua một món đồ, hệ thống lập tức cập nhật hiểu biết của nó về bạn.
 
-  
+
+<img src="flow.png" alt="Architecture Overview" style="max-width: 100%; height: auto;"/>
+
 
 ## 2. Đặc trưng của sở thích người dùng
 
