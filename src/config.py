@@ -21,7 +21,6 @@ event_weights = {
     "click_from_category": 0.12,  # Browsing discovery
     "view_similar_products": 0.15,  # Exploring options
     # === NEGATIVE SIGNALS (Important to prevent bad recommendations) ===
-    # Strengthened and diversified to provide ample true negatives
     "remove_from_cart": -0.3,  # Changed mind
     "return_product": -0.6,  # Strong negative (post-purchase dissatisfaction)
     "refund_requested": -0.7,  # Stronger than return intent
@@ -41,12 +40,3 @@ MERGE_THRESHOLD = 0.7  # Cosine sim threshold to merge into existing interest
 # Interest update parameters
 MAX_STRENGTH = 20.0  # Cap per-interest strength so old interests don't dominate
 MIN_ALPHA = 0.05  # Floor for EMA alpha so vectors stay responsive
-MAX_PURCHASED_IDS = 10  # Keep last N purchased product IDs for exclusion
-
-# Popularity
-POPULARITY_DECAY = 0.95  # Decay factor for popularity scores
-
-# Recommendation slot allocation (must sum to 1.0)
-PERSONAL_RATIO = 0.7  # Personalized from interests
-POPULAR_RATIO = 0.2  # Popular/trending products
-RANDOM_RATIO = 0.1  # Random discovery

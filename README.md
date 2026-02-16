@@ -1,17 +1,16 @@
-# Shopnexus Recommender
+# ShopNexus Embedding
 
 ## 1. Tổng quan
 
-Hệ thống hoạt động như một trợ lý ảo thông minh, liên tục quan sát hành vi của người dùng để xây dựng **nhiều "sở thích số"** (interest vectors) cho mỗi người. Thay vì chỉ có một vector đại diện duy nhất, mỗi người dùng được biểu diễn bằng nhiều vector độc lập — cho phép hệ thống hiểu rằng một người có thể vừa thích giày thể thao, vừa quan tâm đến điện thoại, vừa đang tìm đồ nội thất.
-
-Điểm đặc biệt của hệ thống:
-- **Học tập thời gian thực** (Online Learning): Ngay khi bạn vừa xem hoặc mua một món đồ, hệ thống lập tức cập nhật hiểu biết của nó về bạn, không cần huấn luyện lại mô hình.
-- **Đa sở thích** (Multi-Interest): Mỗi người dùng có nhiều slot sở thích độc lập, gợi ý đa dạng thay vì lặp đi lặp lại cùng một chủ đề.
-- **Khám phá** (Exploration): Kết quả gợi ý pha trộn giữa cá nhân hoá, sản phẩm phổ biến, và khám phá ngẫu nhiên.
+Hệ thống embedding và vector search cho ShopNexus. Chịu trách nhiệm:
+- **Embedding sản phẩm**: Chuyển đổi thông tin sản phẩm (tên, mô tả) thành dense + sparse vectors bằng BGE-M3.
+- **Semantic search**: Tìm kiếm sản phẩm bằng hybrid search (ngữ nghĩa + từ khoá).
+- **Multi-interest user model**: Biểu diễn sở thích người dùng bằng nhiều interest vectors, cập nhật real-time từ hành vi.
+- **Interest-based recommendation**: Gợi ý sản phẩm dựa trên interest vectors qua ANN search trên Milvus.
 
 ## 2. Đặc trưng sở thích người dùng
 
-Để máy tính xử lý được, mọi thứ đều được chuyển đổi thành các dãy số (gọi là **Vector**). Hệ thống sử dụng mô hình **BGE-M3** để tạo ra hai loại vector cho mỗi sản phẩm:
+Hệ thống sử dụng mô hình **BGE-M3** để tạo ra hai loại vector cho mỗi sản phẩm:
 
 1. **Vector Dense (Ngữ nghĩa)**: Mô tả sản phẩm "là cái gì" ở mức ngữ nghĩa sâu. Ví dụ: "giày chạy bộ Nike" sẽ có vector gần với "giày thể thao Adidas" vì cùng thuộc nhóm giày vận động.
 
@@ -64,80 +63,57 @@ Khi người dùng thể hiện sự không hài lòng (trả hàng, dislike, b�
 
 ## 4. Cơ chế gợi ý
 
-Khi cần hiển thị sản phẩm cho bạn (ví dụ: ở trang chủ), hệ thống chia kết quả thành **ba nhóm**:
+Khi cần gợi ý sản phẩm cho người dùng, hệ thống:
 
-### Cá nhân hoá (70%)
+1. **Lấy interest vectors**: Đọc tất cả interest vectors có strength > 0 từ Milvus.
 
-Hệ thống lấy tất cả interest vectors có strength > 0, thực hiện **hybrid search** trên Milvus:
-- Mỗi interest tạo một truy vấn ANN (Approximate Nearest Neighbor) riêng.
-- Kết quả được xếp hạng bằng **WeightedRanker** theo strength — interest mạnh hơn có ảnh hưởng lớn hơn trong kết quả cuối cùng.
-- Loại bỏ sản phẩm đã mua gần đây (lưu 10 sản phẩm gần nhất).
-- Chỉ hiển thị sản phẩm đang hoạt động (`is_active = true`).
+2. **Hybrid search**: Mỗi interest tạo một truy vấn ANN (Approximate Nearest Neighbor) riêng trên collection sản phẩm.
 
-### Sản phẩm phổ biến (20%)
+3. **WeightedRanker**: Kết quả được xếp hạng theo strength đã normalize — interest mạnh hơn có ảnh hưởng lớn hơn trong kết quả cuối cùng.
 
-Lấy các sản phẩm có điểm popularity cao nhất, rồi **weighted random sampling** — sản phẩm càng popular càng có xác suất được chọn cao, nhưng vẫn có tính ngẫu nhiên để không lặp lại mãi cùng kết quả.
+4. **Filter**: Chỉ hiển thị sản phẩm đang hoạt động (`is_active = true`).
 
-Điểm popularity được cập nhật mỗi khi có event mới:
-```
-popularity_mới = popularity_cũ × 0.95 + trọng_số_event
-```
-
-=> Sản phẩm trending sẽ có popularity cao, sản phẩm lâu không ai tương tác sẽ dần giảm.
-
-### Khám phá ngẫu nhiên (10%)
-
-Tạo một vector ngẫu nhiên rồi tìm sản phẩm gần nó nhất trong không gian embedding. Kết quả là những sản phẩm từ **vùng ngẫu nhiên** trong kho hàng — giúp người dùng khám phá những thứ ngoài sở thích hiện tại.
-
-### Xử lý Cold-Start
-
-Khi người dùng mới chưa có dữ liệu tương tác, hệ thống trả về toàn bộ sản phẩm phổ biến. Ngay khi có vài tương tác đầu tiên, interest vectors được tạo và hệ thống chuyển sang gợi ý cá nhân hoá.
+=> Kết quả: Danh sách sản phẩm phù hợp nhất với tổng hợp các sở thích của người dùng, ưu tiên sở thích mạnh hơn.
 
 ## 5. Sơ đồ luồng chi tiết
 
 ```mermaid
 flowchart TB
 
-subgraph RecFlow["Flow lấy Recommendations"]
-    R1["Lấy interest vectors + purchased_ids"]
-    R2["Hybrid search: mỗi interest → ANN query"]
+subgraph RecFlow["Flow gợi ý sản phẩm"]
+    R1["Lấy interest vectors + strengths"]
+    R2["Mỗi interest → ANN search"]
     R3["WeightedRanker theo strength"]
-    R4["Kết hợp: 70% personalized + 20% popular + 10% random"]
-    R5("Kết quả gợi ý")
+    R4("Kết quả gợi ý")
 end
 
 subgraph EventFlow["Flow xử lý sự kiện"]
     E1["Danh sách events"]
     E2["Đánh trọng số theo event_type"]
     E3["Gán vào interest gần nhất (EMA)"]
-    E4["Cập nhật popularity sản phẩm"]
-    E5["Lưu purchased_ids nếu là purchase"]
-    E6["Interest vectors mới"]
+    E4["Interest vectors mới"]
 end
 
 subgraph ProductFlow["Flow cập nhật sản phẩm"]
     P1["Sản phẩm Input"]
-    P2["Embed nội dung bằng BGE-M3"]
-    P3["Dense vector + Sparse vector"]
+    P2["Embed bằng BGE-M3"]
+    P3["Dense + Sparse vectors"]
     P4["Upsert lên Milvus"]
 end
 
 R1 --> R2
 R2 --> R3
 R3 --> R4
-R4 --> R5
 
 E1 --> E2
 E2 --> E3
-E2 --> E4
-E2 --> E5
-E3 --> E6
+E3 --> E4
 
 P1 --> P2
 P2 --> P3
 P3 --> P4
 
-E6 -.-> R1
+E4 -.-> R1
 ```
 
 ## 6. Cấu hình
@@ -148,8 +124,3 @@ E6 -.-> R1
 | `MERGE_THRESHOLD` | 0.7 | Ngưỡng cosine similarity tối thiểu để hoà trộn vào interest |
 | `MAX_STRENGTH` | 20.0 | Giới hạn trên của strength |
 | `MIN_ALPHA` | 0.05 | Sàn của hệ số EMA alpha |
-| `MAX_PURCHASED_IDS` | 10 | Số sản phẩm đã mua lưu lại để loại trừ |
-| `POPULARITY_DECAY` | 0.95 | Hệ số suy giảm cho popularity |
-| `PERSONAL_RATIO` | 0.7 | Tỷ lệ slot cá nhân hoá |
-| `POPULAR_RATIO` | 0.2 | Tỷ lệ slot phổ biến |
-| `RANDOM_RATIO` | 0.1 | Tỷ lệ slot khám phá |
