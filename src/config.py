@@ -4,8 +4,7 @@ DESCRIPTION_LENGTH = 10 * 1024
 
 event_weights = {
     # === HIGH INTENT EVENTS (Strong purchase/interest signals) ===
-    "purchase": 1.0,  # Strongest signal - actual conversion
-    "repeat_purchase": 1.2,  # Even stronger - proven preference
+    "purchase": 0.8,  # Strongest positive signal - user bought it
     "add_to_cart": 0.5,  # Strong intent but not committed
     "view": 0.3,  # Strong intent but not committed
     # "checkout_initiated": 0.7,          # Started checkout process
@@ -35,11 +34,19 @@ event_weights = {
     "view_bounce": -0.1,  # Very short view / bounce
 }
 
-# Time-decay configuration for event weighting
-# Exponential decay using half-life: weight *= 0.5 ** (age_days / half_life_days)
-DECAY_ENABLED = True
-DECAY_HALF_LIFE_DAYS = 30.0
-DECAY_MIN_FACTOR = 0.05  # floor to prevent vanishing weights
+# Multi-interest configuration
+NUM_INTERESTS = 4
+MERGE_THRESHOLD = 0.7  # Cosine sim threshold to merge into existing interest
 
-# Vector update configuration
-ACCOUNT_UPDATE_WEIGHT = 0.2  # Weight for new vector vs old vector (0.5 = equal weight)
+# Interest update parameters
+MAX_STRENGTH = 20.0  # Cap per-interest strength so old interests don't dominate
+MIN_ALPHA = 0.05  # Floor for EMA alpha so vectors stay responsive
+MAX_PURCHASED_IDS = 10  # Keep last N purchased product IDs for exclusion
+
+# Popularity
+POPULARITY_DECAY = 0.95  # Decay factor for popularity scores
+
+# Recommendation slot allocation (must sum to 1.0)
+PERSONAL_RATIO = 0.7  # Personalized from interests
+POPULAR_RATIO = 0.2  # Popular/trending products
+RANDOM_RATIO = 0.1  # Random discovery

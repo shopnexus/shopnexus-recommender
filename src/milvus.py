@@ -1,7 +1,7 @@
 import logging
 import numpy as np
-from datetime import datetime
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set
+from config import NUM_INTERESTS
 from pymilvus import (
     connections,
     FieldSchema,
@@ -20,19 +20,14 @@ class MilvusClient:
 
     def __init__(
         self,
-        cf_dim: int,
         content_dim: int,
-        fused_dim: int,
         milvus_host: str = "localhost",
         milvus_port: int = 19530,
     ):
         """Initialize Milvus connection and setup collections"""
         self.milvus_host = milvus_host
         self.milvus_port = milvus_port
-
-        self.cf_dim = cf_dim
         self.content_dim = content_dim
-        self.fused_dim = fused_dim
 
         # Setup connection and collections
         connections.connect(host=self.milvus_host, port=self.milvus_port)
@@ -58,17 +53,12 @@ class MilvusClient:
                 FieldSchema(name="rating", dtype=DataType.FLOAT),
                 FieldSchema(name="skus", dtype=DataType.JSON),
                 FieldSchema(name="specifications", dtype=DataType.JSON),
+                FieldSchema(name="popularity", dtype=DataType.FLOAT),
                 FieldSchema(name="sparse_vector", dtype=DataType.SPARSE_FLOAT_VECTOR),
                 FieldSchema(
                     name="content_vector",
                     dtype=DataType.FLOAT_VECTOR,
                     dim=self.content_dim,
-                ),
-                FieldSchema(
-                    name="cf_vector", dtype=DataType.FLOAT_VECTOR, dim=self.cf_dim
-                ),
-                FieldSchema(
-                    name="fused_vector", dtype=DataType.FLOAT_VECTOR, dim=self.fused_dim
                 ),
             ],
             "indexes": [
@@ -82,46 +72,36 @@ class MilvusClient:
                     "index_type": "AUTOINDEX",
                     "metric_type": "COSINE",
                 },
-                {
-                    "field_name": "cf_vector",
-                    "index_type": "AUTOINDEX",
-                    "metric_type": "COSINE",
-                },
-                {
-                    "field_name": "fused_vector",
-                    "index_type": "AUTOINDEX",
-                    "metric_type": "COSINE",
-                },
             ],
         }
 
+        interest_fields = []
+        interest_indexes = []
+        for i in range(1, NUM_INTERESTS + 1):
+            interest_fields.append(
+                FieldSchema(name=f"interest_{i}", dtype=DataType.FLOAT_VECTOR, dim=self.content_dim)
+            )
+            interest_fields.append(
+                FieldSchema(name=f"strength_{i}", dtype=DataType.FLOAT)
+            )
+            interest_indexes.append({
+                "field_name": f"interest_{i}",
+                "index_type": "AUTOINDEX",
+                "metric_type": "COSINE",
+            })
+
         self.accounts_schema = {
             "name": "accounts",
-            "description": "Accounts with embeddings for recommendations",
+            "description": "Accounts with multi-interest embeddings for recommendations",
             "schema": [
                 FieldSchema(
                     name="id", dtype=DataType.VARCHAR, max_length=36, is_primary=True, auto_id=False
                 ),
                 FieldSchema(name="number", dtype=DataType.INT64),
-                FieldSchema(
-                    name="cf_vector", dtype=DataType.FLOAT_VECTOR, dim=self.cf_dim
-                ),
-                FieldSchema(
-                    name="fused_vector", dtype=DataType.FLOAT_VECTOR, dim=self.fused_dim
-                ),
+                *interest_fields,
+                FieldSchema(name="purchased_ids", dtype=DataType.JSON),
             ],
-            "indexes": [
-                {
-                    "field_name": "cf_vector",
-                    "index_type": "AUTOINDEX",
-                    "metric_type": "COSINE",
-                },
-                {
-                    "field_name": "fused_vector",
-                    "index_type": "AUTOINDEX",
-                    "metric_type": "COSINE",
-                },
-            ],
+            "indexes": interest_indexes,
         }
 
         self.products_collection = self._setup_collection(self.products_schema)
@@ -186,6 +166,7 @@ class MilvusClient:
         vector: np.ndarray,
         limit: int = 10,
         output_fields: List[str] = None,
+        expr: str = None,
     ) -> List[Dict[str, Any]]:
         """Search similar vectors in collection"""
         results = collection.search(
@@ -194,6 +175,7 @@ class MilvusClient:
             param={"metric_type": "COSINE"},
             limit=limit,
             output_fields=output_fields or ["id", anns_field],
+            expr=expr,
         )
         return results[0]
 

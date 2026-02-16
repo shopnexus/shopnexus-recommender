@@ -39,7 +39,6 @@ def register_routes(app, service: Service):
         limit = request.args.get("limit", 10, type=int)
         account_id = request.args.get("account_id")
 
-        print(f"Account ID: {account_id}")
         results = service.recommend(account_id, limit=limit)
         return jsonify(results)
 
@@ -74,16 +73,6 @@ def register_routes(app, service: Service):
         metadata_only = data.get("metadata_only", False)
         service.update_products(products, metadata_only=metadata_only)
         return jsonify({"message": "Successfully updated products"})
-
-    @app.route("/train", methods=["POST"])
-    def resume_training():
-        """Resume training the model"""
-        service.resume_training(
-            learning_rate=request.json.get("learning_rate"),
-            l2_reg=request.json.get("l2_reg"),
-            dropout_rate=request.json.get("dropout_rate"),
-        )
-        return jsonify({"message": "Successfully resumed training"})
 
     @app.route("/health", methods=["GET"])
     def health_check():

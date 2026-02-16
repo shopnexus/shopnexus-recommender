@@ -3,6 +3,11 @@ from flask import Flask
 from service import Service
 from routes import register_routes
 
+# Patch for transformers to avoid torch.fx import error in environments without PyTorch FX support
+import transformers.utils.import_utils as _import_utils
+if not hasattr(_import_utils, "is_torch_fx_available"):
+    _import_utils.is_torch_fx_available = lambda: False
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

@@ -1,203 +1,155 @@
-# Shopnexus recommender  
+# Shopnexus Recommender
 
 ## 1. Tổng quan
 
-Hệ thống hoạt động như một trợ lý ảo thông minh, liên tục quan sát hành vi của người dùng để xây dựng một "sở thích số" (profile vector) cho mỗi người. Dựa trên sở thích này, hệ thống sẽ tìm kiếm trong kho hàng những sản phẩm có độ tương đồng cao nhất để gợi ý.
+Hệ thống hoạt động như một trợ lý ảo thông minh, liên tục quan sát hành vi của người dùng để xây dựng **nhiều "sở thích số"** (interest vectors) cho mỗi người. Thay vì chỉ có một vector đại diện duy nhất, mỗi người dùng được biểu diễn bằng nhiều vector độc lập — cho phép hệ thống hiểu rằng một người có thể vừa thích giày thể thao, vừa quan tâm đến điện thoại, vừa đang tìm đồ nội thất.
 
-  
+Điểm đặc biệt của hệ thống:
+- **Học tập thời gian thực** (Online Learning): Ngay khi bạn vừa xem hoặc mua một món đồ, hệ thống lập tức cập nhật hiểu biết của nó về bạn, không cần huấn luyện lại mô hình.
+- **Đa sở thích** (Multi-Interest): Mỗi người dùng có nhiều slot sở thích độc lập, gợi ý đa dạng thay vì lặp đi lặp lại cùng một chủ đề.
+- **Khám phá** (Exploration): Kết quả gợi ý pha trộn giữa cá nhân hoá, sản phẩm phổ biến, và khám phá ngẫu nhiên.
 
-Điểm đặc biệt của hệ thống là khả năng **học tập thời gian thực** (Real-time Learning): ngay khi bạn vừa xem hoặc mua một món đồ, hệ thống lập tức cập nhật hiểu biết của nó về bạn.
+## 2. Đặc trưng sở thích người dùng
 
+Để máy tính xử lý được, mọi thứ đều được chuyển đổi thành các dãy số (gọi là **Vector**). Hệ thống sử dụng mô hình **BGE-M3** để tạo ra hai loại vector cho mỗi sản phẩm:
 
-<img src="flow.png" alt="Architecture Overview" style="max-width: 100%; height: auto;"/>
+1. **Vector Dense (Ngữ nghĩa)**: Mô tả sản phẩm "là cái gì" ở mức ngữ nghĩa sâu. Ví dụ: "giày chạy bộ Nike" sẽ có vector gần với "giày thể thao Adidas" vì cùng thuộc nhóm giày vận động.
 
+2. **Vector Sparse (Từ khoá)**: Mô tả sản phẩm dựa trên các từ khoá cụ thể. Giúp tìm kiếm chính xác khi người dùng nhập từ khoá đặc thù mà ngữ nghĩa không bắt được.
 
-## 2. Đặc trưng của sở thích người dùng
+Mỗi người dùng được biểu diễn bằng **N slot sở thích** (mặc định 4). Mỗi slot gồm:
+- **Interest vector**: Hướng trong không gian embedding, đại diện cho một nhóm sở thích (ví dụ: "giày thể thao", "điện thoại").
+- **Strength**: Độ mạnh / độ tin cậy của sở thích đó, thể hiện mức độ tương tác tích luỹ.
 
-  
+## 3. Quy trình xử lý sự kiện
 
-Để máy tính xử lý được, mọi thứ đều được chuyển đổi thành các dãy số (gọi là **Vector**). Hệ thống sử dụng phương pháp biểu diễn lai (Hybrid Representation):
+### Bước 1: Tiếp nhận và Đánh trọng số
 
-  
+Khi người dùng tương tác, hệ thống đánh giá mức độ quan trọng dựa trên **loại hành động**:
 
-1.  **Vector Nội dung (Content Vector)**: Mô tả sản phẩm "là cái gì". Được tạo ra từ tên, mô tả, đặc tính sản phẩm. Ví dụ: Điện thoại iPhone sẽ có vector gần với Samsung Galaxy (vì cùng là smartphone).
+| Hành động | Trọng số | Ý nghĩa |
+|-----------|----------|----------|
+| Mua hàng | +0.8 | Tín hiệu tích cực mạnh nhất |
+| Thêm yêu thích | +0.6 | Lưu vĩnh viễn — quan tâm cao |
+| Thêm giỏ hàng | +0.5 | Ý định mạnh nhưng chưa cam kết |
+| Xem sản phẩm | +0.3 | Quan tâm cơ bản |
+| Báo cáo sản phẩm | -1.2 | Tín hiệu tiêu cực mạnh nhất |
+| Trả hàng | -0.6 | Không hài lòng sau mua |
+| Dislike | -0.5 | Không thích rõ ràng |
 
-2.  **Vector Cộng tác (Collaborative Filtering Vector - CF)**: Mô tả "ai thích sản phẩm này". Được học từ lịch sử mua sắm của cộng đồng. Ví dụ: Người mua bỉm thường mua thêm sữa, nên bỉm và sữa sẽ có vector CF gần nhau, dù chúng là hai loại hàng khác hẳn nhau.
+### Bước 2: Gán sở thích (Multi-Interest Assignment)
 
-3.  **Vector Hợp nhất (Fused Vector)**: Là sự kết hợp của hai loại trên, giúp hệ thống vừa hiểu đặc tính sản phẩm, vừa hiểu xu hướng tiêu dùng.
+Sau khi tính trọng số, hệ thống quyết định **gán tương tác vào slot sở thích nào**:
 
-  
+1. **Tìm interest gần nhất**: So sánh vector sản phẩm với từng interest vector hiện tại bằng cosine similarity.
 
-## 3. Quy trình xử lý
-  
+2. **Nếu đủ giống (similarity > ngưỡng)**: Hoà trộn vào interest đó bằng EMA (Exponential Moving Average). Sở thích cũ được "pha" với tín hiệu mới, giữ lại thói quen lâu dài nhưng vẫn phản ánh thay đổi gần đây.
 
-### Bước 1: Tiếp nhận và Đánh trọng số (Weighting)
+3. **Nếu còn slot trống**: Tạo interest mới — hệ thống nhận ra bạn đang quan tâm đến một chủ đề hoàn toàn mới.
 
-Khi người dùng tương tác (ví dụ: xem một chiếc áo), hệ thống không chỉ ghi nhận "đã xem", mà còn đánh giá mức độ quan trọng:
+4. **Tất cả slot đầy, không giống cái nào**: Hoà trộn dần vào slot yếu nhất. Nếu bạn liên tục tương tác với chủ đề mới, slot yếu nhất sẽ dần chuyển sang chủ đề đó một cách tự nhiên.
 
-*  **Loại hành động**: Mua hàng (Purchase) có trọng số cao hơn nhiều so với chỉ xem (View) hoặc thêm vào giỏ (Add to Cart).
+### Bước 3: Xử lý tín hiệu tiêu cực
 
-*  **Tính thời điểm (Time Decay)**: Hành động vừa xảy ra quan trọng hơn hành động tuần trước. Hệ thống áp dụng hàm suy giảm để quên dần những sở thích quá cũ.
+Khi người dùng thể hiện sự không hài lòng (trả hàng, dislike, báo cáo...), hệ thống không chỉ giảm độ mạnh của interest liên quan, mà còn **đẩy vector ra xa** khỏi sản phẩm đó. Nhờ vậy, lần gợi ý tiếp theo sẽ tránh xa loại sản phẩm gây khó chịu.
 
-  
+### Các cơ chế bảo vệ
 
-### Bước 2: Tổng hợp & Hợp nhất (Fusion)
-
-Hệ thống lấy vector của tất cả sản phẩm bạn vừa tương tác, nhân với trọng số ở Bước 1, rồi cộng gộp lại.
-
-* Kết quả là một vector đại diện cho **sở thích hiện tại** của bạn (ví dụ: bạn đang rất quan tâm đến "giày chạy bộ màu đỏ").
-
-* Hệ thống kết hợp cả yếu tố nội dung (bạn thích giày) và yếu tố cộng đồng (người mua đôi giày này cũng muốn mua thêm X).
-
-  
-
-### Bước 3: Cập nhật profile
-
-Sở thích con người là sự pha trộn giữa **thói quen lâu dài** và **nhu cầu tức thời**. Hệ thống mô phỏng điều này bằng công thức toán học (Exponential Moving Average):
-
-* Nó lấy "sở thích cũ" của bạn (những gì nó đã biết từ trước).
-
-* Nó trộn với "Sở thích hiện tại" vừa tính toán được.
-
-* Kết quả là "sở thích mới" được cập nhật vào cơ sở dữ liệu.
-
-  
-
-=> **Kết quả**: Ngay sau khi bạn click vào vài chiếc váy, hệ thống lập tức "lái" hướng gợi ý sang thời trang nữ, nhưng vẫn không quên rằng bạn vốn thích đồ công nghệ (nếu đó là sở thích lâu dài của bạn).
-
-  
+| Vấn đề | Giải pháp |
+|--------|-----------|
+| Strength tăng vô hạn → interest cũ áp đảo | Giới hạn tại `MAX_STRENGTH = 20.0` |
+| Interest vector bị "đông cứng" theo thời gian | `MIN_ALPHA = 0.05` đảm bảo mỗi tương tác dịch chuyển vector ít nhất 5% |
+| Thay thế slot phá huỷ hoàn toàn sở thích cũ | EMA blend dần thay vì xoá trắng |
+| Tín hiệu tiêu cực chỉ giảm strength | Đẩy vector ra xa sản phẩm tiêu cực |
 
 ## 4. Cơ chế gợi ý
 
-  
+Khi cần hiển thị sản phẩm cho bạn (ví dụ: ở trang chủ), hệ thống chia kết quả thành **ba nhóm**:
 
-Khi cần hiển thị sản phẩm cho bạn (ví dụ: ở trang chủ), hệ thống thực hiện:
+### Cá nhân hoá (70%)
 
-1.  **Truy xuất Profile**: Lấy vector sở thích hiện tại của bạn.
+Hệ thống lấy tất cả interest vectors có strength > 0, thực hiện **hybrid search** trên Milvus:
+- Mỗi interest tạo một truy vấn ANN (Approximate Nearest Neighbor) riêng.
+- Kết quả được xếp hạng bằng **WeightedRanker** theo strength — interest mạnh hơn có ảnh hưởng lớn hơn trong kết quả cuối cùng.
+- Loại bỏ sản phẩm đã mua gần đây (lưu 10 sản phẩm gần nhất).
+- Chỉ hiển thị sản phẩm đang hoạt động (`is_active = true`).
 
-2.  **Tìm kiếm Tương đồng (Similarity Search)**: Quét toàn bộ kho hàng để tìm những sản phẩm có vector gần giống với vector của bạn nhất trong không gian toán học.
+### Sản phẩm phổ biến (20%)
 
-3.  **Kết quả**: Những sản phẩm "gần" nhất chính là những sản phẩm phù hợp nhất với cả nội dung bạn quan tâm và xu hướng cộng đồng.
+Lấy các sản phẩm có điểm popularity cao nhất, rồi **weighted random sampling** — sản phẩm càng popular càng có xác suất được chọn cao, nhưng vẫn có tính ngẫu nhiên để không lặp lại mãi cùng kết quả.
 
-  
+Điểm popularity được cập nhật mỗi khi có event mới:
+```
+popularity_mới = popularity_cũ × 0.95 + trọng_số_event
+```
 
-## 5. Xử lý khi có Sản phẩm mới (Cold Start)
+=> Sản phẩm trending sẽ có popularity cao, sản phẩm lâu không ai tương tác sẽ dần giảm.
 
-  
+### Khám phá ngẫu nhiên (10%)
 
-Khi một sản phẩm mới toanh được nhập kho, chưa ai mua, làm sao để gợi ý?
+Tạo một vector ngẫu nhiên rồi tìm sản phẩm gần nó nhất trong không gian embedding. Kết quả là những sản phẩm từ **vùng ngẫu nhiên** trong kho hàng — giúp người dùng khám phá những thứ ngoài sở thích hiện tại.
 
-* Hệ thống phân tích tên và mô tả của nó để tìm các sản phẩm cũ tương tự (dựa trên nội dung).
+### Xử lý Cold-Start
 
-* Nó "vay mượn" thông tin hành vi (CF vector) của các sản phẩm cũ đó gán cho sản phẩm mới.
+Khi người dùng mới chưa có dữ liệu tương tác, hệ thống trả về toàn bộ sản phẩm phổ biến. Ngay khi có vài tương tác đầu tiên, interest vectors được tạo và hệ thống chuyển sang gợi ý cá nhân hoá.
 
-* Nhờ vậy, sản phẩm mới có thể được gợi ý ngay lập tức cho đúng người mà không cần chờ có người mua đầu tiên.
-
-  
-
-## 6. Sơ đồ Luồng Chi tiết (Detailed Flows)
-
-  
-
-Dưới đây là sơ đồ chi tiết mô tả các luồng xử lý chính của hệ thống, bao gồm logic cập nhật sản phẩm và xử lý vector:
-
-  
+## 5. Sơ đồ luồng chi tiết
 
 ```mermaid
 flowchart TB
 
 subgraph RecFlow["Flow lấy Recommendations"]
-
-R2["Tìm kiếm tương đồng những sản phẩm liên quan"]
-
-R1["Lấy vector profile người dùng"]
-
-R3("Kết quả Gợi ý")
-
+    R1["Lấy interest vectors + purchased_ids"]
+    R2["Hybrid search: mỗi interest → ANN query"]
+    R3["WeightedRanker theo strength"]
+    R4["Kết hợp: 70% personalized + 20% popular + 10% random"]
+    R5("Kết quả gợi ý")
 end
 
-subgraph UpdateInterest["Flow cập nhật sở thích cá nhân"]
-
-U2["Embed nội dung sản phẩm đã tương tác"]
-
-U1["List hành vi người dùng"]
-
-U3["Tính toán vector profile"]
-
-U4["Vector Profile mới"]
-
+subgraph EventFlow["Flow xử lý sự kiện"]
+    E1["Danh sách events"]
+    E2["Đánh trọng số theo event_type"]
+    E3["Gán vào interest gần nhất (EMA)"]
+    E4["Cập nhật popularity sản phẩm"]
+    E5["Lưu purchased_ids nếu là purchase"]
+    E6["Interest vectors mới"]
 end
 
-subgraph ProductUpdate["Flow cập nhật sản phẩm"]
-
-P2("Trigger Batch Update")
-
-P1["Đánh dấu sản phẩm cập nhật sau"]
-
-end
-
-subgraph AddProduct["Flow thêm sản phẩm mới vào hệ thống"]
-
-N_Content["Vector Content d768: Embed nội dung"]
-
-N1["Sản phẩm Input"]
-
-CheckNew{"Sản phẩm mới?"}
-
-FindSim["Tìm sản phẩm tương đồng"]
-
-N_CF_New["Lấy TB cộng Vector CF - Fix Cold-start"]
-
-N_CF_Old["Lấy Vector CF hiện tại"]
-
-N_Fused["Vector Fused d896 = Content + CF"]
-
-DB_Update["Cập nhật lên CSDL Vector"]
-
-end
-
-subgraph Schema["Vector Schema"]
-
-direction TB
-
-Schema_Prod["Product: id, number, cf_vector d128, content_vector d768, fused_vector d896"]
-
-Schema_Acc["Account: id, number, cf_vector d128, content_vector d768, fused_vector d896"]
-
+subgraph ProductFlow["Flow cập nhật sản phẩm"]
+    P1["Sản phẩm Input"]
+    P2["Embed nội dung bằng BGE-M3"]
+    P3["Dense vector + Sparse vector"]
+    P4["Upsert lên Milvus"]
 end
 
 R1 --> R2
-
 R2 --> R3
+R3 --> R4
+R4 --> R5
 
-U1 --> U2
+E1 --> E2
+E2 --> E3
+E2 --> E4
+E2 --> E5
+E3 --> E6
 
-U2 --> U3
+P1 --> P2
+P2 --> P3
+P3 --> P4
 
-U3 -- Trung bình, Time Decay, Trọng số Event --> U4
-
-P1 -- Sau mỗi 30 phút --> P2
-
-N1 --> N_Content & CheckNew
-
-CheckNew -- Yes --> FindSim
-
-FindSim --> N_CF_New
-
-CheckNew -- No --> N_CF_Old
-
-N_Content --> N_Fused
-
-N_CF_New --> N_Fused
-
-N_CF_Old --> N_Fused
-
-N_Fused --> DB_Update
-
-P2 --> N1
-
-U4 -.-> R1
-
+E6 -.-> R1
 ```
 
-  
+## 6. Cấu hình
+
+| Tham số | Mặc định | Mô tả |
+|---------|----------|-------|
+| `NUM_INTERESTS` | 4 | Số slot sở thích mỗi người dùng |
+| `MERGE_THRESHOLD` | 0.7 | Ngưỡng cosine similarity tối thiểu để hoà trộn vào interest |
+| `MAX_STRENGTH` | 20.0 | Giới hạn trên của strength |
+| `MIN_ALPHA` | 0.05 | Sàn của hệ số EMA alpha |
+| `MAX_PURCHASED_IDS` | 10 | Số sản phẩm đã mua lưu lại để loại trừ |
+| `POPULARITY_DECAY` | 0.95 | Hệ số suy giảm cho popularity |
+| `PERSONAL_RATIO` | 0.7 | Tỷ lệ slot cá nhân hoá |
+| `POPULAR_RATIO` | 0.2 | Tỷ lệ slot phổ biến |
+| `RANDOM_RATIO` | 0.1 | Tỷ lệ slot khám phá |
