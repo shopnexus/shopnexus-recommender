@@ -53,3 +53,5 @@ The server starts on `http://localhost:8000`.
 - **Model:** BGE-M3 (dense + sparse embeddings)
 - **Framework:** Flask
 - **Dependencies:** FlagEmbedding, PyMilvus Model, Transformers, PyTorch
+
+<img width="1200" height="630" alt="Image" src="https://github.com/user-attachments/assets/e8ea3d12-b545-4ad3-a78a-e431e95e9b52" />
